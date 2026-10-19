@@ -24,7 +24,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from sumut_rain import load_config, project_path  # noqa: E402
 
-TIMEOUT = 600
+TIMEOUT = (30, 600)  
 MAX_RETRIES = 4
 
 

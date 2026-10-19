@@ -15,7 +15,7 @@ period:
 
 chirps:
   # Sumber utama: NOAA ERDDAP (bisa subset wilayah langsung, file kecil)
-  erddap_url: "https://coastwatch.pfeg.noaa.gov/erddap/griddap/chirps20GlobalDailyP05.nc"
+  erddap_url: "https://upwell.pfeg.noaa.gov/erddap/griddap/chirps20GlobalDailyP05.nc"
   variable: "precip"
   # Cadangan: file global tahunan dari CHC UCSB (~1,2 GB per tahun)
   chc_url: "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/netcdf/p05/chirps-v2.0.{year}.days_p05.nc"
