@@ -1,0 +1,19 @@
+# Data tidak di-commit (besar & bisa diunduh ulang dengan script)
+data/raw/**
+data/processed/**
+data/external/**
+!data/**/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Draft paper ditahan sampai submit (hapus baris ini setelah submit/preprint)
+paper/drafts/

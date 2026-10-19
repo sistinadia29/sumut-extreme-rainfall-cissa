@@ -1,0 +1,35 @@
+name: sumut-rain
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  # data & iklim
+  - numpy
+  - pandas
+  - xarray
+  - netcdf4
+  - dask
+  - scipy
+  - pyyaml
+  - requests
+  - tqdm
+  # spasial & peta
+  - geopandas
+  - rioxarray
+  - regionmask
+  - cartopy
+  # statistik ekstrem & tren
+  - statsmodels
+  - pymannkendall
+  # visualisasi & dashboard
+  - matplotlib
+  - plotly
+  - streamlit
+  # database
+  - duckdb
+  # notebook
+  - jupyterlab
+  - ipykernel
+  - pip
+  - pip:
+      - pyextremes

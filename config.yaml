@@ -1,0 +1,32 @@
+# Konfigurasi utama proyek. Semua script membaca file ini,
+# jadi wilayah atau periode cukup diubah di sini saja.
+
+region:
+  name: "Sumatera Utara"
+  # Bounding box (derajat). Mencakup daratan Sumut + Kepulauan Nias.
+  lat_min: 0.5
+  lat_max: 4.5
+  lon_min: 97.0
+  lon_max: 100.5
+
+period:
+  start_year: 1981
+  end_year: 2025        # tahun lengkap terakhir
+
+chirps:
+  # Sumber utama: NOAA ERDDAP (bisa subset wilayah langsung, file kecil)
+  erddap_url: "https://coastwatch.pfeg.noaa.gov/erddap/griddap/chirps20GlobalDailyP05.nc"
+  variable: "precip"
+  # Cadangan: file global tahunan dari CHC UCSB (~1,2 GB per tahun)
+  chc_url: "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/netcdf/p05/chirps-v2.0.{year}.days_p05.nc"
+
+climate_indices:
+  oni: "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
+  nino34: "https://psl.noaa.gov/data/correlation/nina34.anom.data"
+  dmi: "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data"
+
+paths:
+  raw_chirps: "data/raw/chirps"
+  external: "data/external"
+  processed: "data/processed"
+  figures: "outputs/figures"
