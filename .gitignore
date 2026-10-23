@@ -17,3 +17,9 @@ __pycache__/
 
 # Draft paper ditahan sampai submit (hapus baris ini setelah submit/preprint)
 paper/drafts/
+
+# Hasil inti paper (CiSSA, Mann-Kendall) ditahan sampai naskah dikirim ke jurnal.
+# Hapus baris-baris ini setelah submit / preprint.
+outputs/tables/cissa_*
+outputs/tables/mann_kendall.csv
+outputs/figures/cissa_*

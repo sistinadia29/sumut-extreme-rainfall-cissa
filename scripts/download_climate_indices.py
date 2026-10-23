@@ -1,12 +1,14 @@
 """
 Unduh indeks iklim bulanan dan simpan dalam satu CSV rapi:
     data/external/climate_indices_monthly.csv
-dengan kolom: date, oni, nino34, dmi
+dengan kolom: date, oni, nino34, dmi, tpi
 
 - ONI    : Oceanic Niño Index (NOAA CPC), rata-rata 3 bulanan anomali Niño 3.4.
            Musim "DJF 1982" ditaruh di bulan tengahnya (Januari 1982).
 - Niño3.4: anomali SST bulanan (NOAA PSL).
 - DMI    : Dipole Mode Index untuk IOD (NOAA PSL, berbasis HadISST).
+- TPI    : Tripole Index untuk Interdecadal Pacific Oscillation (IPO), NOAA PSL, ERSSTv5
+           (Henley et al. 2015). Dipakai untuk variabilitas dekadal.
 
 Contoh:
     python scripts/download_climate_indices.py
@@ -75,7 +77,10 @@ def main() -> None:
     print("Mengunduh DMI...")
     dmi = parse_psl(fetch_text(urls["dmi"]), "dmi")
 
-    df = pd.concat([oni, nino34, dmi], axis=1)
+    print("Mengunduh TPI (IPO)...")
+    tpi = parse_psl(fetch_text(urls["tpi"]), "tpi")
+
+    df = pd.concat([oni, nino34, dmi, tpi], axis=1)
     start = f"{cfg['period']['start_year']}-01-01"
     df = df.loc[start:].rename_axis("date")
 

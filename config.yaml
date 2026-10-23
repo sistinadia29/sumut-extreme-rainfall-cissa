@@ -31,6 +31,7 @@ climate_indices:
   oni: "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
   nino34: "https://psl.noaa.gov/data/correlation/nina34.anom.data"
   dmi: "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data"
+  tpi: "https://psl.noaa.gov/data/timeseries/IPOTPI/tpi.timeseries.ersstv5.data"
 
 boundaries:
   # geoBoundaries (simplified). ADM1: OpenStreetMap, ODbL. ADM2: BPS/OCHA, CC BY 3.0 IGO.
@@ -44,6 +45,18 @@ indices:
   heavy_mm: 20.0           # ambang R20mm
   percentile: 95           # untuk R95p
   base_period: [1991, 2020]  # periode acuan persentil (normal iklim WMO terbaru)
+
+cissa:
+  window_months: auto              # "auto" = dipilih otomatis dari window_search; atau isi angka, misalnya 168
+  window_search: [96, 264, 12]     # kandidat L: dari 96 s.d. 264 bulan, langkah 12 (selalu kelipatan 12)
+                                   # batas bawah 96 = periode terpanjang pita antartahunan (8 tahun)
+                                   # batas atas <= T/2 (540/2 = 270 bulan)
+  window_refine_radius: 5          # tahap 2: cari ulang L_kasar-5 s.d. L_kasar+5 dengan langkah 1 (0 = tanpa tahap 2)
+  trend_min_period_months: 96      # periode > 8 tahun -> tren / frekuensi rendah
+  interannual_band_months: [18, 96]  # 1.5-8 tahun -> pita ENSO/IOD
+  max_lag_months: 6                # lag korelasi dengan ONI/DMI (hujan tertinggal dari indeks)
+  sensitivity_start_year: 1991     # uji Mann-Kendall ulang tanpa dekade awal CHIRPS
+  n_surrogates: 1000               # uji signifikansi acak fase (Ebisuzaki 1997)
 
 paths:
   raw_chirps: "data/raw/chirps"
