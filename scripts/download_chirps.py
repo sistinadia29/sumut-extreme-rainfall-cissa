@@ -3,7 +3,9 @@ Unduh CHIRPS v2.0 harian (0,05°) untuk wilayah di config.yaml, satu file per ta
 
 Sumber utama: NOAA ERDDAP, yang bisa memotong wilayah di server sehingga
 file yang diunduh kecil (beberapa MB per tahun untuk Sumut).
-Sumber cadangan (--source chc): file global tahunan dari CHC UCSB (~1,2 GB),
+Sumber alternatif (--source iri): IRI Data Library, Columbia University,
+juga memotong wilayah di server. Pakai ini kalau ERDDAP sedang tidak bisa diakses.
+Sumber cadangan terakhir (--source chc): file global tahunan dari CHC UCSB (~1,2 GB),
 lalu dipotong secara lokal dan file globalnya dihapus.
 
 Contoh:
@@ -17,6 +19,7 @@ import sys
 import time
 from pathlib import Path
 
+import pandas as pd
 import requests
 import xarray as xr
 from tqdm import tqdm
@@ -24,8 +27,8 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from sumut_rain import load_config, project_path  # noqa: E402
 
-TIMEOUT = (30, 600)  
-MAX_RETRIES = 4
+TIMEOUT = (30, 600)  # 30 dtk untuk tersambung, 600 dtk untuk mengunduh
+MAX_RETRIES = 8
 
 
 def erddap_query(cfg: dict, year: int) -> str:
@@ -41,27 +44,37 @@ def erddap_query(cfg: dict, year: int) -> str:
 
 def stream_download(url: str, dest: Path) -> None:
     """Unduh dengan retry dan backoff; tulis ke file .part dulu supaya
-    file setengah jadi tidak dianggap selesai."""
+    file setengah jadi tidak dianggap selesai. Kalau koneksi putus,
+    unduhan dilanjutkan dari byte terakhir (HTTP Range), bukan dari nol."""
     tmp = dest.with_suffix(dest.suffix + ".part")
     for attempt in range(1, MAX_RETRIES + 1):
+        done = tmp.stat().st_size if tmp.exists() else 0
+        headers = {"Range": f"bytes={done}-"} if done else {}
         try:
-            with requests.get(url, stream=True, timeout=TIMEOUT) as resp:
+            with requests.get(url, stream=True, timeout=TIMEOUT, headers=headers) as resp:
+                if resp.status_code == 416:      # file .part sudah lengkap
+                    break
                 resp.raise_for_status()
-                total = int(resp.headers.get("content-length", 0))
-                with open(tmp, "wb") as f, tqdm(
-                    total=total, unit="B", unit_scale=True,
+                if done and resp.status_code != 206:
+                    done = 0                     # server tidak mendukung lanjut: mulai ulang
+                total = done + int(resp.headers.get("content-length", 0))
+                with open(tmp, "ab" if done else "wb") as f, tqdm(
+                    total=total, initial=done, unit="B", unit_scale=True,
                     desc=dest.name, leave=False,
                 ) as bar:
                     for chunk in resp.iter_content(chunk_size=1 << 20):
                         f.write(chunk)
                         bar.update(len(chunk))
-            tmp.rename(dest)
-            return
+            break
         except requests.RequestException as e:
-            wait = 10 * attempt
-            print(f"  gagal (percobaan {attempt}/{MAX_RETRIES}): {e}. Coba lagi {wait} dtk")
+            wait = min(10 * attempt, 60)
+            got = tmp.stat().st_size / 1e6 if tmp.exists() else 0
+            print(f"  terputus (percobaan {attempt}/{MAX_RETRIES}, sudah {got:.0f} MB): "
+                  f"{type(e).__name__}. Lanjut lagi {wait} dtk")
             time.sleep(wait)
-    raise RuntimeError(f"Tidak berhasil mengunduh {url}")
+    else:
+        raise RuntimeError(f"Tidak berhasil mengunduh {url}")
+    tmp.replace(dest)
 
 
 def validate(path: Path, year: int, var: str) -> None:
@@ -95,19 +108,48 @@ def download_chc(cfg: dict, year: int, dest: Path) -> None:
     global_file.unlink()
 
 
+def download_iri(cfg: dict, year: int, dest: Path) -> None:
+    """IRI Data Library (Columbia University): potong wilayah & tahun di server,
+    lalu samakan nama dimensi/variabel dengan format ERDDAP."""
+    r = cfg["region"]
+    url = (f"{cfg['chirps']['iri_url']}"
+           f"/X/{r['lon_min']}/{r['lon_max']}/RANGEEDGES"
+           f"/Y/{r['lat_min']}/{r['lat_max']}/RANGEEDGES"
+           f"/T/(1%20Jan%20{year})/(31%20Dec%20{year})/RANGEEDGES/data.nc")
+    tmp = dest.parent / f"_iri_{year}.nc"
+    stream_download(url, tmp)
+    with xr.open_dataset(tmp, decode_times=False) as ds:
+        ds = ds.load()
+    tmp.unlink()
+
+    var_in = "prcp" if "prcp" in ds else list(ds.data_vars)[0]
+    ds = ds.rename({"X": "longitude", "Y": "latitude", "T": "time",
+                    var_in: cfg["chirps"]["variable"]})
+    # Waktu IRI berupa angka hari; ganti dengan tanggal kalender harian
+    ds = ds.assign_coords(time=pd.date_range(f"{year}-01-01",
+                                             periods=ds.sizes["time"], freq="D"))
+    ds = ds.sortby("latitude")
+    for c in ("longitude", "latitude", "time"):
+        ds[c].attrs = {}
+    ds.to_netcdf(dest)
+
+
+DOWNLOADERS = {"erddap": download_erddap, "iri": download_iri, "chc": download_chc}
+
+
 def main() -> None:
     cfg = load_config()
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--start", type=int, default=cfg["period"]["start_year"])
     p.add_argument("--end", type=int, default=cfg["period"]["end_year"])
-    p.add_argument("--source", choices=["erddap", "chc"], default="erddap")
+    p.add_argument("--source", choices=list(DOWNLOADERS), default="erddap")
     p.add_argument("--overwrite", action="store_true")
     args = p.parse_args()
 
     out_dir = project_path(cfg["paths"]["raw_chirps"])
     var = cfg["chirps"]["variable"]
-    downloader = download_erddap if args.source == "erddap" else download_chc
+    downloader = DOWNLOADERS[args.source]
 
     print(f"Wilayah: {cfg['region']['name']} | {args.start}-{args.end} | sumber: {args.source}")
     failed = []

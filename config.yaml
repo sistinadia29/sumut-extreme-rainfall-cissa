@@ -3,7 +3,11 @@
 
 region:
   name: "Sumatera Utara"
-  # Bounding box (derajat). Mencakup daratan Sumut + Kepulauan Nias.
+  # Bounding box (derajat) data CHIRPS yang sudah diunduh.
+  # CATATAN: batas provinsi Sumut sebenarnya 97.06-100.44 BT, -0.64-4.30 LU.
+  # Kotak ini memotong Kepulauan Batu (Nias Selatan) dan ujung selatan
+  # Mandailing Natal (~2.3% luas provinsi). Untuk cakupan penuh, ubah lat_min
+  # ke -0.7 lalu unduh ulang (murah lewat ERDDAP, ~3 MB/tahun).
   lat_min: 0.5
   lat_max: 4.5
   lon_min: 97.0
@@ -17,6 +21,9 @@ chirps:
   # Sumber utama: NOAA ERDDAP (bisa subset wilayah langsung, file kecil)
   erddap_url: "https://upwell.pfeg.noaa.gov/erddap/griddap/chirps20GlobalDailyP05.nc"
   variable: "precip"
+  # Alternatif: IRI Data Library (Columbia University). Sejak 2026 mewajibkan
+  # login, jadi --source iri belum bisa dipakai tanpa akun.
+  iri_url: "https://iridl.ldeo.columbia.edu/SOURCES/.UCSB/.CHIRPS/.v2p0/.daily/.global/.0p05/.prcp"
   # Cadangan: file global tahunan dari CHC UCSB (~1,2 GB per tahun)
   chc_url: "https://data.chc.ucsb.edu/products/CHIRPS-2.0/global_daily/netcdf/p05/chirps-v2.0.{year}.days_p05.nc"
 
@@ -24,6 +31,19 @@ climate_indices:
   oni: "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
   nino34: "https://psl.noaa.gov/data/correlation/nina34.anom.data"
   dmi: "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data"
+
+boundaries:
+  # geoBoundaries (simplified). ADM1: OpenStreetMap, ODbL. ADM2: BPS/OCHA, CC BY 3.0 IGO.
+  adm1_url: "https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson"
+  adm2_url: "https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson"
+  province_name: "North Sumatra"
+  exclude_units: ["Danau Toba"]     # badan air, bukan kabupaten/kota
+
+indices:
+  wet_day_mm: 1.0          # ambang hari basah (ETCCDI)
+  heavy_mm: 20.0           # ambang R20mm
+  percentile: 95           # untuk R95p
+  base_period: [1991, 2020]  # periode acuan persentil (normal iklim WMO terbaru)
 
 paths:
   raw_chirps: "data/raw/chirps"
