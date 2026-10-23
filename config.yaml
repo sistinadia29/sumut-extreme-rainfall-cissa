@@ -58,6 +58,13 @@ cissa:
   sensitivity_start_year: 1991     # uji Mann-Kendall ulang tanpa dekade awal CHIRPS
   n_surrogates: 1000               # uji signifikansi acak fase (Ebisuzaki 1997)
 
+gev:
+  indices: [rx1day, rx5day]        # maksimum tahunan yang dimodelkan
+  return_periods: [2, 20, 50]      # tingkat ulang (tahun)
+  oni_levels: [-1.0, 0.0, 1.0]     # La Nina, netral, El Nino (ONI rata-rata tahunan)
+  n_boot: 500                      # bootstrap parametrik untuk selang kepercayaan 95%
+  alpha_fdr: 0.10                  # ambang FDR untuk peta per sel (Wilks 2016)
+
 paths:
   raw_chirps: "data/raw/chirps"
   external: "data/external"

@@ -8,6 +8,8 @@ Tiga analisis:
     (ONI/DMI didekomposisi dengan CiSSA, L dan pengelompokan yang sama).
  B. Korelasi per frekuensi: setiap komponen elementer k di pita antartahunan, hujan_k vs
     indeks_k (frekuensi yang sama). Menunjukkan periode mana yang terkait ENSO dan mana IOD.
+ D. Korelasi parsial (pita antartahunan): ENSO dengan IOD dikendalikan dan sebaliknya,
+    plus pemisahan R^2 regresi menjadi bagian unik ENSO, unik IOD, dan bersama.
  C. Variabilitas dekadal: komponen frekuensi rendah hujan vs komponen frekuensi rendah TPI (IPO).
 
 Semua p-value memakai surrogate acak fase (Ebisuzaki 1997) dengan statistik |r| maksimum
@@ -17,6 +19,7 @@ Keluaran (ikut ditahan .gitignore sampai naskah dikirim):
     outputs/tables/cissa_band_correlation.csv
     outputs/tables/cissa_frequency_correlation.csv
     outputs/tables/cissa_decadal_ipo.csv
+    outputs/tables/cissa_partial_correlation.csv
     outputs/figures/cissa_frequency_<var>.png
     outputs/figures/cissa_decadal_ipo.png
 
@@ -37,7 +40,7 @@ import pandas as pd  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from sumut_rain import load_config, project_path  # noqa: E402
 from sumut_rain.cissa import cissa, group_components  # noqa: E402
-from sumut_rain.stats import fdr_bh, surrogate_lag_test  # noqa: E402
+from sumut_rain.stats import commonality, fdr_bh, partial_lag_test, surrogate_lag_test  # noqa: E402
 
 BLUE, ORANGE, GRAY = "#2a78d6", "#eb6834", "#b4b2ab"
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e6e5e1"
@@ -104,7 +107,7 @@ def main() -> None:
     Ls = chosen_L(cfg, tables)
     print(f"L yang dipakai: {Ls}  |  surrogate: {n_surr}  |  lag 0..{max_lag} bulan\n")
 
-    band_rows, freq_rows, dec_rows = [], [], []
+    band_rows, freq_rows, dec_rows, partial_rows = [], [], [], []
     dec_series = {}
     for var, L in Ls.items():
         x = df[var].values.astype(float)
@@ -119,10 +122,14 @@ def main() -> None:
             idx_comp[c] = (ci, group_components(fi, ci, **gkw))
 
         # A. pita-setara (ONI, DMI)
+        band_lags = {}
         for c in ("oni", "dmi"):
             res = surrogate_lag_test(gx["interannual"], idx_comp[c][1]["interannual"],
                                      max_lag, n_surr, seed=1)
+            band_lags[c] = res["lag_months"]
             band_rows.append({"variable": var, "L": L, "index": c.upper(), **res})
+        targets = [("band 1.5-8 yr", gx["interannual"],
+                    {c: idx_comp[c][1]["interannual"] for c in ("oni", "dmi")}, band_lags)]
 
         # B. per frekuensi
         for k in np.flatnonzero(in_band):
@@ -135,6 +142,20 @@ def main() -> None:
                 row[f"lag_{c}"] = res["lag_months"]
                 row[f"p_{c}"] = round(res["p_surrogate"], 4)
             freq_rows.append(row)
+
+        # D. korelasi parsial: ENSO dengan IOD dikendalikan, dan sebaliknya,
+        #    plus pemisahan R^2 menjadi unik ENSO, unik IOD, dan bersama.
+        #    Hanya di level pita: pada satu frekuensi tunggal, komponen ONI dan DMI hampir
+        #    berupa dua sinus identik (kolinear), sehingga korelasi parsialnya tidak stabil.
+        for j, (level, xs, ys, lags) in enumerate(targets):
+            com = commonality(xs, ys["oni"], ys["dmi"], lags["oni"], lags["dmi"])
+            for c, ctrl, key in (("oni", "dmi", "unique_1"), ("dmi", "oni", "unique_2")):
+                res = partial_lag_test(xs, ys[c], ys[ctrl], lags[ctrl], max_lag, n_surr, seed=100 + j)
+                partial_rows.append({"variable": var, "L": L, "level": level, "index": c.upper(),
+                                     "controlled_for": ctrl.upper(), **res,
+                                     "r2_full_pct": round(100 * com["r2_full"], 1),
+                                     "unique_pct": round(100 * com[key], 1),
+                                     "shared_pct": round(100 * com["shared"], 1)})
 
         # C. dekadal (TPI)
         if "tpi" in indices:
@@ -150,6 +171,10 @@ def main() -> None:
         freq_df[f"q_{c}"] = np.round(fdr_bh(freq_df[f"p_{c}"].values), 4)
     band_df.to_csv(tables / "cissa_band_correlation.csv", index=False)
     freq_df.to_csv(tables / "cissa_frequency_correlation.csv", index=False)
+    partial_df = pd.DataFrame(partial_rows)
+    partial_df["partial_r"] = partial_df["partial_r"].round(3)
+    partial_df["q_value"] = np.round(fdr_bh(partial_df["p_surrogate"].values), 4)  # 4 uji: 2 variabel x 2 indeks
+    partial_df.to_csv(tables / "cissa_partial_correlation.csv", index=False)
 
     for var in Ls:
         plot_frequency(freq_df[freq_df["variable"] == var], var, figs / f"cissa_frequency_{var.replace('_mm', '')}.png")
@@ -163,6 +188,8 @@ def main() -> None:
     print(band_df.to_string(index=False))
     print("\n=== B. Korelasi per frekuensi (q = Benjamini-Hochberg) ===")
     print(freq_df.drop(columns=["L", "k"]).to_string(index=False))
+    print("\n=== D. Korelasi parsial ENSO vs IOD di pita 1.5-8 tahun + pemisahan R^2 (%) ===")
+    print(partial_df.drop(columns=["L"]).to_string(index=False))
     if dec_rows:
         print("\n=== C. Komponen frekuensi rendah hujan vs TPI (IPO) ===")
         print(dec_df.to_string(index=False))

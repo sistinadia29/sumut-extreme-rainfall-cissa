@@ -58,3 +58,65 @@ def fdr_bh(p: np.ndarray) -> np.ndarray:
     out = np.empty(n)
     out[order] = np.minimum(q, 1.0)
     return out
+
+
+# ---------------------------------------------------------------- korelasi parsial
+def shift(y: np.ndarray, lag: int) -> np.ndarray:
+    """y digeser lag langkah ke depan: hasil[t] = y[t - lag]; awalnya NaN."""
+    y = np.asarray(y, float)
+    if lag == 0:
+        return y.copy()
+    out = np.full_like(y, np.nan)
+    out[lag:] = y[:-lag]
+    return out
+
+
+def _residual(a: np.ndarray, z: np.ndarray) -> np.ndarray:
+    Z = np.column_stack([np.ones(len(z)), z])
+    coef, *_ = np.linalg.lstsq(Z, a, rcond=None)
+    return a - Z @ coef
+
+
+def partial_corr(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> float:
+    """r(x, y | z): korelasi x dan y setelah pengaruh linear z dikeluarkan dari keduanya."""
+    return float(np.corrcoef(_residual(x, z), _residual(y, z))[0, 1])
+
+
+def _partial_by_lag(x, y, z_shifted, max_lag):
+    vals = np.empty(max_lag + 1)
+    for lag in range(max_lag + 1):
+        ys = shift(y, lag)
+        m = np.isfinite(ys) & np.isfinite(z_shifted)
+        vals[lag] = partial_corr(x[m], ys[m], z_shifted[m])
+    return vals
+
+
+def partial_lag_test(x, y, z, lag_z: int, max_lag: int = 6, n_surr: int = 1000, seed: int = 0) -> dict:
+    """Korelasi parsial x vs y (lag terbaik 0..max_lag) dengan z dikendalikan pada lag_z.
+    p-value: surrogate acak fase pada x, statistik |r parsial| maksimum di semua lag."""
+    zs = shift(z, lag_z)
+    r = _partial_by_lag(np.asarray(x, float), y, zs, max_lag)
+    best = int(np.argmax(np.abs(r)))
+    obs = abs(r[best])
+    rng = np.random.default_rng(seed)
+    null = np.array([np.max(np.abs(_partial_by_lag(phase_randomize(x, rng), y, zs, max_lag)))
+                     for _ in range(n_surr)])
+    p = (1 + np.sum(null >= obs)) / (n_surr + 1)
+    return {"lag_months": best, "partial_r": float(r[best]), "p_surrogate": float(p)}
+
+
+def commonality(x, y1, y2, lag1: int, lag2: int) -> dict:
+    """Pemisahan R^2 regresi x ~ y1 + y2 menjadi bagian unik y1, unik y2, dan bersama."""
+    a, b = shift(y1, lag1), shift(y2, lag2)
+    m = np.isfinite(a) & np.isfinite(b)
+    x, a, b = np.asarray(x, float)[m], a[m], b[m]
+
+    def r2(*cols):
+        Z = np.column_stack([np.ones(len(x)), *cols])
+        coef, *_ = np.linalg.lstsq(Z, x, rcond=None)
+        res = x - Z @ coef
+        return 1 - res.var() / x.var()
+
+    full, only1, only2 = r2(a, b), r2(a), r2(b)
+    return {"r2_full": full, "unique_1": full - only2, "unique_2": full - only1,
+            "shared": only1 + only2 - full}

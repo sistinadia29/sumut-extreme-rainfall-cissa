@@ -87,6 +87,7 @@ Butuh sekitar 30 detik (1.000 surrogate untuk setiap uji).
 |---|---|---|
 | **A. Pita-setara** | Komponen antartahunan hujan vs komponen antartahunan ONI/DMI. ONI dan DMI didekomposisi dengan CiSSA, L dan pita yang sama | Yang dibandingkan harus setara: hasil penyaringan dengan hasil penyaringan |
 | **B. Per frekuensi** | Setiap komponen elementer k di pita 1,5–8 tahun: hujan_k vs ONI_k dan DMI_k | Menunjukkan **periode mana** yang terkait ENSO dan mana yang terkait IOD. Ini keunggulan khas CiSSA, karena setiap komponen terikat ke satu frekuensi yang diketahui |
+| **D. Korelasi parsial** | Di pita antartahunan: hujan vs ONI dengan DMI dikendalikan, dan sebaliknya. Ditambah pemisahan R² regresi menjadi bagian **unik ENSO**, **unik IOD**, dan **bersama** | ENSO dan IOD sering terjadi bersamaan (1997, 2019, 2023), sehingga sebagian korelasi DMI bisa "meminjam" pengaruh ENSO. Analisis ini memisahkannya. Hanya dilakukan di level pita, karena pada satu frekuensi tunggal komponen ONI dan DMI hampir identik (kolinear) sehingga hasil parsialnya tidak stabil |
 | **C. Dekadal** | Komponen frekuensi rendah (> 8 tahun) hujan vs TPI (IPO) | Menguji dugaan bahwa gelombang kering 1990-an dan basah 2008–2010 terkait IPO |
 
 **Signifikansi:** semua p-value memakai **surrogate acak fase** (Ebisuzaki 1997). Fase Fourier deret hujan diacak 1.000 kali sambil spektrumnya dipertahankan. Statistik ujinya adalah |r| maksimum di lag 0–6 bulan, sehingga p-value sudah memperhitungkan pemilihan lag terbaik. Kolom `r95_null` adalah |r| yang bisa muncul **hanya karena kebetulan** pada deret sehalus ini. Pada uji dengan data buatan, angkanya mencapai 0,7–0,8. Itu sebabnya p-value biasa menyesatkan untuk komponen CiSSA. Untuk analisis B ditambahkan **q-value Benjamini–Hochberg**, karena banyak frekuensi diuji sekaligus.
@@ -95,11 +96,57 @@ Butuh sekitar 30 detik (1.000 surrogate untuk setiap uji).
 - Analisis B dengan tepat menunjuk periode **4,33 tahun** (r = −0,99, q = 0,016, lag 4 bulan) sebagai satu-satunya frekuensi yang terkait ENSO
 - Hubungan dengan DMI tidak signifikan, sesuai dengan cara data dibuat
 
+**Uji analisis D dengan data buatan:** IOD dibuat berkorelasi dengan ENSO tapi tidak memengaruhi hujan. Korelasi parsial berhasil membongkarnya: ENSO tetap signifikan setelah IOD dikendalikan (r parsial = −0,77, q = 0,02), sedangkan IOD tidak (r parsial = −0,17, q = 0,86). Bagian unik IOD hanya 0,1% dari R².
+
 **Catatan jujur untuk analisis C:** dalam 45 tahun hanya ada 2–3 siklus dekadal. Derajat kebebasannya sangat kecil, sehingga uji signifikansi apa pun di skala ini rapuh. Pada data buatan bahkan muncul satu positif palsu (p = 0,013 untuk deret yang sebenarnya tidak berhubungan). Di paper, sajikan analisis C sebagai **deskriptif/indikatif**, jangan sebagai bukti statistik.
 
 **Keluaran** (ditahan oleh `.gitignore`):
 - `outputs/tables/cissa_band_correlation.csv`, `cissa_frequency_correlation.csv`, `cissa_decadal_ipo.csv`
 - `outputs/figures/cissa_frequency_prcp.png`, `cissa_frequency_rx1day.png`, `cissa_decadal_ipo.png`
+
+## Bagian 4c — Validasi tanpa data BMKG: stasiun GHCN-Daily
+
+```
+python scripts/find_ghcn_stations.py
+```
+
+Script ini mencari semua stasiun **GHCN-Daily (NOAA)** yang punya data hujan harian di dalam wilayah Sumut (ditambah buffer 0,25°), lalu mengunduh datanya dan membuang nilai yang gagal kontrol kualitas. Hasilnya berupa laporan kelengkapan data per dekade. Unduhan pertama ±45 MB (daftar stasiun dan inventaris). Setelah itu file disimpan, jadi pemanggilan berikutnya cepat.
+
+Yang perlu dilihat dari hasilnya:
+- **years_ge80pct:** jumlah tahun yang ≥ 80% harinya terisi. Hanya tahun seperti ini yang layak dipakai untuk menghitung RX1DAY.
+- **cov_1980s_pct:** kelengkapan data di dekade 1980-an. Ini kunci untuk menguji dugaan artefak RX1DAY di CHIRPS.
+
+Langkah selanjutnya bergantung pada hasil:
+- **Ada stasiun dengan ≥ 10 tahun layak** → kita buat script validasi CHIRPS vs stasiun (korelasi, bias, deteksi hari hujan, RX1DAY per dekade)
+- **Tidak ada atau terlalu sedikit** → kita pakai validasi lintas dataset (APHRODITE atau ERA5)
+
+Catatan: data GHCN untuk Indonesia umumnya berasal dari laporan SYNOP stasiun BMKG yang dikirim ke jaringan internasional. Sebagian hari kering kadang tidak terlaporkan, jadi kelengkapan per tahun perlu dicek sebelum dipakai.
+
+## Bagian 4d — Validasi CHIRPS vs stasiun GHCN (hari-berpasangan)
+
+Jalankan satu per satu:
+```
+python tests/test_validation.py
+```
+```
+python scripts/validate_chirps_ghcn.py
+```
+
+Data GHCN di Sumut bolong-bolong, jadi tidak ada stasiun yang punya 10 tahun lengkap. Karena itu CHIRPS dibandingkan **hanya pada hari-hari ketika stasiun punya data** (hari-berpasangan), tanpa perlu tahun yang lengkap.
+
+| Langkah | Isi |
+|---|---|
+| Sel CHIRPS | Sel **darat** terdekat dari stasiun. Stasiun pantai seperti Belawan bisa jatuh di sel laut yang bernilai kosong, jadi sel laut dilewati |
+| Pergeseran hari | Diuji −1, 0, +1 hari, lalu dipakai yang korelasinya tertinggi. Laporan SYNOP mencatat 24 jam yang berakhir 00 UTC (07.00 WIB), sehingga "hari" stasiun bisa bergeser satu hari dari CHIRPS |
+| Harian | r, Spearman, bias, RMSE, MAE, serta deteksi hari hujan (POD, FAR, CSI pada ambang 1 mm) |
+| Bulanan | Total hujan untuk bulan yang ≥ 90% harinya tersedia |
+| Kuantil hari basah | P50, P90, P95, P99, dan maksimum. **Rasio < 1 berarti CHIRPS meremehkan.** Ini menjawab apakah CHIRPS meremehkan hujan ekstrem |
+| Per dekade | Bias dan rasio P95/P99 per dekade (minimal 300 hari berpasangan). Menguji dugaan artefak 1980-an sejauh datanya ada |
+
+**Keterbatasan yang perlu ditulis di paper:**
+- Data GHCN untuk Indonesia berasal dari laporan SYNOP, dan hari kering kadang tidak terlaporkan. Frekuensi hari basah di stasiun bisa jadi terlalu tinggi, sehingga nilai FAR CHIRPS terlihat lebih buruk dari sebenarnya.
+- Validasi titik (stasiun) dengan sel grid 0,05° (±5,5 km) memang membandingkan dua skala yang berbeda. Hujan ekstrem di satu titik secara alami lebih tinggi daripada rata-rata satu sel, jadi rasio kuantil ekstrem < 1 sebagian wajar.
+- Sampel 1980-an kecil (kelengkapan 0–23%). Kesimpulan per dekade untuk 1980-an bersifat indikatif.
 
 ## Tutup minggu ini
 

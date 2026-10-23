@@ -23,3 +23,7 @@ paper/drafts/
 outputs/tables/cissa_*
 outputs/tables/mann_kendall.csv
 outputs/figures/cissa_*
+outputs/tables/validation_*
+outputs/figures/validation_*
+outputs/tables/gev_*
+outputs/figures/gev_*
