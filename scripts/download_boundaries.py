@@ -54,16 +54,21 @@ def main() -> None:
     kab = kab.rename(columns={"shapeName": "kabupaten"})[["kabupaten", "geometry"]]
     kab = kab.sort_values("kabupaten").reset_index(drop=True)
 
-    # Cakupan kotak unduhan CHIRPS per kabupaten (rasio luas dalam derajat; cukup untuk perbandingan)
+    # Cakupan kotak unduhan CHIRPS per kabupaten, dihitung dalam proyeksi UTM 47N (meter)
     r = cfg["region"]
     bbox = box(r["lon_min"], r["lat_min"], r["lon_max"], r["lat_max"])
-    kab["chirps_coverage"] = (kab.geometry.intersection(bbox).area / kab.geometry.area).round(3)
+    utm = 32647
+    kab_m = kab.to_crs(utm)
+    bbox_m = gpd.GeoSeries([bbox], crs=4326).to_crs(utm).iloc[0]
+    kab["chirps_coverage"] = (kab_m.geometry.intersection(bbox_m).area
+                              / kab_m.geometry.area).round(3).values
 
     prov[["shapeName", "geometry"]].to_file(ext / "sumut_province.geojson", driver="GeoJSON")
     kab.to_file(ext / "sumut_kabupaten.geojson", driver="GeoJSON")
 
     minx, miny, maxx, maxy = prov_geom.bounds
-    prov_cov = prov_geom.intersection(bbox).area / prov_geom.area
+    prov_m = prov.to_crs(utm).geometry.iloc[0]
+    prov_cov = prov_m.intersection(bbox_m).area / prov_m.area
     print(f"\nProvinsi : {b['province_name']}  (BT {minx:.2f}-{maxx:.2f}, LU {miny:.2f}-{maxy:.2f})")
     print(f"Cakupan kotak CHIRPS untuk provinsi: {prov_cov:.1%}")
     print(f"Kabupaten/kota: {len(kab)} (yang diharapkan 33)")

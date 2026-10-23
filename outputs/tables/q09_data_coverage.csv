@@ -1,0 +1,4 @@
+kabupaten,n_cells,method,chirps_coverage
+Nias Selatan,43,mean,0.52
+Mandailing Natal,186,mean,0.9
+Kota Sibolga,1,nearest,1.0
